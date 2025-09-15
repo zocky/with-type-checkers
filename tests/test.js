@@ -214,6 +214,47 @@ describe('with-type-checkers - Comprehensive Tests', () => {
     });
   });
 
+  describe('Array & Object Specs', () => {
+  const TestClass = withTypeCheckers();
+  const instance = new TestClass();
+
+  /* ---------- arrays ---------- */
+  it('homogeneous array of strings', () => {
+    assert(instance.is(['string'], ['a', 'b']));
+    assert(!instance.is(['string'], ['a', 1]));
+  });
+
+   it('nested array', () => {
+    assert(instance.is([['string']], [['a', 'b'], ['c']]));
+    assert(!instance.is([['string']], [['a', 1]]));
+  });
+
+  /* ---------- objects ---------- */
+  it('shape {name:string,age:number}', () => {
+    assert(instance.is({ name: 'string', age: 'number' }, { name: 'Bob', age: 30 }));
+    assert(!instance.is({ name: 'string', age: 'number' }, { name: 'Bob' }));          // missing
+    assert(!instance.is({ name: 'string', age: 'number' }, { name: 30, age: 30 }));    // wrong type
+  });
+
+  it('nested shape', () => {
+    const spec = { user: { id: 'number', name: 'string' } };
+    assert(instance.is(spec, { user: { id: 1, name: 'Ann' } }));
+    assert(!instance.is(spec, { user: { id: '1', name: 'Ann' } }));
+  });
+
+  it('optional field via union', () => {
+    assert(instance.is({ name: 'string', age: 'number|undefined' }, { name: 'Bob' }));
+    assert(instance.is({ name: 'string', age: 'number|undefined' }, { name: 'Bob', age: 30 }));
+    assert(!instance.is({ name: 'string', age: 'number|undefined' }, { name: 'Bob', age: 'x' }));
+  });
+
+  it('mixed array + object', () => {
+    const spec = { tags: ['string'], meta: { count: 'number' } };
+    assert(instance.is(spec, { tags: ['a', 'b'], meta: { count: 2 } }));
+    assert(!instance.is(spec, { tags: [1], meta: { count: 2 } }));
+  });
+});
+
 });
 
 // Run tests

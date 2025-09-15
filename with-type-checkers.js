@@ -45,7 +45,7 @@ export function createWithTypeCheckers(extraCheckers = {}) {
   for (const type in typeCheckers) {
     const checker = typeCheckers[type];
     checkerProto[type] = function (value, desc) {
-      
+
       this._handler(checker(value), { desc, type, value });
     };
   }
@@ -56,22 +56,31 @@ export function createWithTypeCheckers(extraCheckers = {}) {
   }
 
   /* ---- 2c. core helpers ---- */
-  const is = (type, value) =>
-    type.split('|').some(t => typeCheckers[t]?.(value));
-
+  const is = (type, value) => {
+    if (typeof type === 'string') return type.split('|').some(t => typeCheckers[t]?.(value));
+    if (Array.isArray(type)) {
+      if (!Array.isArray(value)) return false;
+      if (type.length !== 1) throw new Error(prefix + 'array type checkers must be of length 1');
+      const [t] = type;
+      return value.every(v => is(t, v));
+    }
+    if (type && typeof type === 'object') {
+      if (typeof value !== 'object' || value === null) return false;
+      for (const k in type) {
+        if (!is(type[k], value[k])) return false;
+      }
+      return true;
+    }
+  }
   is.not = (type, value) => !is(type, value);
 
-  const are = (type, arr) => {
-    if (!Array.isArray(arr)) return false;
-    const types = type.split('|');
-    return arr.every(v => types.some(t => typeCheckers[t]?.(v)));
-  };
+
 
   /* ---- 2d. binders ---- */
   const _assert = (prefix, cond, msg) => { if (!cond) throw new Error(prefix + _msg(msg)); };
-  const _assertNot = (prefix, cond, msg) => { if (cond) throw new Error(prefix + _msg({...msg, type: 'not ' + msg.type})); };
+  const _assertNot = (prefix, cond, msg) => { if (cond) throw new Error(prefix + _msg({ ...msg, type: 'not ' + msg.type })); };
   const _check = (prefix, cond, msg) => { if (!cond) console.warn(prefix + _msg(msg)); };
-  const _checkNot = (prefix, cond, msg) => { if (cond) console.warn(prefix + _msg({...msg, type: 'not ' + msg.type})); };
+  const _checkNot = (prefix, cond, msg) => { if (cond) console.warn(prefix + _msg({ ...msg, type: 'not ' + msg.type })); };
 
   const bindChecker = (ctx, prefix, fn, fnNot) => {
     const handler = fn.bind(ctx, prefix);
@@ -79,17 +88,12 @@ export function createWithTypeCheckers(extraCheckers = {}) {
     handler.is._handler = handler;
     handler.is.not = Object.create(checkerProto);
     handler.is.not._handler = fnNot.bind(ctx, prefix);
-    // NO ARRAY SUPPORT FOR NOW
-    // handler.are = Object.create(checkerProto);
-    // handler.are._handler = (type, arr) => _assert(prefix, are(type, arr), '');
     return handler;
   };
 
   /* ---- 2e. context installer ---- */
   const applyCheckerContext = (ctx, prefix) => {
     ctx.is = is;
-    // NO ARRAY SUPPORT FOR NOW
-    // ctx.are = are;
     ctx.assert = bindChecker(ctx, prefix, _assert, _assertNot);
     ctx.check = bindChecker(ctx, prefix, _check, _checkNot);
     ctx.log = console.log.bind(console, prefix);
@@ -100,9 +104,9 @@ export function createWithTypeCheckers(extraCheckers = {}) {
   };
 
   /* ---- 2f. the returned mixin factory ---- */
-  
-  
-  
+
+
+
   return function (ClassOrOptions = {}, maybeOptions) {
     // both arguments are optional
     // supply a class for mixins, optionally skip for creating a base class
