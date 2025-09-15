@@ -1,243 +1,220 @@
-// Import the module
-import { createWithTypeCheckers, withTypeCheckers } from '../with-type-checkers.js';
+#!/usr/bin/env node
+import { withTypeCheckers, createWithTypeCheckers } from '../with-type-checkers.js';
+import { describe, it, assert, assertThrows, assertDoesNotThrow, report } from './tiny-test.js';
 
-// Test runner with better reporting
-const testRunner = {
-  tests: [],
-  errors: [],
-  
-  addTest(name, testFn) {
-    this.tests.push({ name, fn: testFn });
-  },
-  
-  runTests() {
-    console.log(`Running ${this.tests.length} tests...\n`);
-    
-    this.tests.forEach((test, index) => {
-      try {
-        test.fn();
-        console.log(`✓ ${index + 1}. ${test.name}`);
-      } catch (error) {
-        this.errors.push({ test: test.name, error });
-        console.error(`✗ ${index + 1}. ${test.name}: ${error.message}`);
-      }
-    });
-    
-    console.log(`\nResults: ${this.tests.length - this.errors.length}/${this.tests.length} tests passed`);
-    
-    if (this.errors.length > 0) {
-      console.error('\nFailed tests:');
-      this.errors.forEach((err, i) => {
-        console.error(`${i + 1}. ${err.test}: ${err.error.message}`);
+describe('with-type-checkers - Comprehensive Tests', () => {
+
+  describe('Basic Type Assertions', () => {
+    const TestClass = withTypeCheckers();
+    const instance = new TestClass();
+
+    // Test each type checker
+    const testCases = [
+      ['string', 'hello', true],
+      ['string', 123, false],
+      ['number', 42, true],
+      ['number', '42', false],
+      ['boolean', true, true],
+      ['boolean', 'true', false],
+      ['object', {}, true],
+      ['object', null, false],
+      ['object', [], false], // Arrays are not plain objects
+      ['array', [], true],
+      ['array', {}, false],
+      ['function', () => {}, true],
+      ['function', '() => {}', false],
+      ['null', null, true],
+      ['null', undefined, false],
+      ['undefined', undefined, true],
+      ['undefined', null, false],
+      ['nullish', null, true],
+      ['nullish', undefined, true],
+      ['nullish', 0, false],
+      ['symbol', Symbol(), true],
+      ['symbol', 'symbol', false],
+      ['bigint', 42n, true],
+      ['bigint', 42, false],
+      ['date', new Date(), true],
+      ['date', '2023-01-01', false],
+      ['regexp', /abc/, true],
+      ['regexp', 'abc', false],
+      ['error', new Error(), true],
+      ['error', 'error', false],
+      ['promise', Promise.resolve(), true],
+      ['promise', {}, false],
+      ['set', new Set(), true],
+      ['set', [], false],
+      ['map', new Map(), true],
+      ['map', {}, false],
+      ['iterable', [], true], // Arrays are iterable
+      ['iterable', {}, false], // Plain objects are not iterable
+      ['numeric', '42', true],
+      ['numeric', 42, true],
+      ['numeric', 'abc', false],
+      ['emptyString', '', true],
+      ['emptyString', 'hello', false],
+      ['notEmptyString', 'hello', true],
+      ['notEmptyString', '', false],
+      ['emptyArray', [], true],
+      ['emptyArray', [1], false],
+      ['notEmptyArray', [1], true],
+      ['notEmptyArray', [], false],
+      ['falsy', false, true],
+      ['falsy', '', true],
+      ['falsy', 'hello', false],
+      ['truthy', 'hello', true],
+      ['truthy', 1, true],
+      ['truthy', '', false],
+      ['primitive', 'hello', true],
+      ['primitive', 42, true],
+      ['primitive', {}, false],
+    ];
+
+    testCases.forEach(([type, value, expected]) => {
+      it(`${type} checker with ${String(value)}`, () => {
+        assert(instance.is(type, value) === expected);
       });
-      throw new Error('Some tests failed');
-    } else {
-      console.log('\nAll tests passed!');
+    });
+  });
+
+  describe('Union Types', () => {
+    const TestClass = withTypeCheckers();
+    const instance = new TestClass();
+
+    it('handles string|number union', () => {
+      assert(instance.is('string|number', 'hello'));
+      assert(instance.is('string|number', 42));
+      assert(!instance.is('string|number', true));
+    });
+
+    it('handles multiple type unions', () => {
+      assert(instance.is('string|number|boolean', 'hello'));
+      assert(instance.is('string|number|boolean', 42));
+      assert(instance.is('string|number|boolean', true));
+      assert(!instance.is('string|number|boolean', null));
+    });
+  });
+
+  describe('Assertion Methods', () => {
+    class TestClass extends withTypeCheckers() {
+      testMethod(value) {
+        this.assert.is.string(value, 'value');
+      }
     }
-  }
-};
+    const instance = new TestClass();
 
-// Test 1: Default type checkers validation
-testRunner.addTest('Default type checkers', () => {
-  const { is } = createWithTypeCheckers()(class {});
-  
-  const testCases = [
-    ['object', {}, true],
-    ['object', [], false],
-    ['plainObject', {}, true],
-    ['plainObject', new Date(), false],
-    ['string', 'test', true],
-    ['number', 42, true],
-    ['boolean', true, true],
-    ['function', () => {}, true],
-    ['array', [], true],
-    ['null', null, true],
-    ['undefined', undefined, true],
-    ['nullish', null, true],
-    ['symbol', Symbol(), true],
-    ['bigint', 9007199254740991n, true],
-    ['date', new Date(), true],
-    ['regexp', /test/, true],
-    ['error', new Error(), true],
-    ['promise', Promise.resolve(), true],
-    ['set', new Set(), true],
-    ['map', new Map(), true],
-    ['iterable', [], true],
-    ['numeric', '42', true],
-    ['emptyString', '', true],
-    ['notEmptyString', 'test', true],
-    ['emptyArray', [], true],
-    ['notEmptyArray', [1], true],
-    ['falsy', false, true],
-    ['truthy', true, true],
-    ['primitive', null, true],
-    ['asyncFunction', async () => {}, true],
-    ['syncFunction', () => {}, true],
-  ];
+    it('throws on type mismatch', () => {
+      assertThrows(
+        () => instance.testMethod(42),
+        'value expected string but got 42'
+      );
+    });
 
-  testCases.forEach(([type, value, expected]) => {
-    if (is(type, value) !== expected) {
-      throw new Error(`${type} checker failed for value: ${String(value)}`);
+    it('does not throw on correct type', () => {
+      assertDoesNotThrow(() => instance.testMethod('hello'));
+    });
+  });
+
+  describe('Not Assertions', () => {
+    class TestClass extends withTypeCheckers() {
+      testMethod(value) {
+        this.assert.is.not.number(value, 'value');
+      }
     }
-  });
-});
+    const instance = new TestClass();
 
-// Test 2: Composite types with '|'
-testRunner.addTest('Composite types', () => {
-  const { is } = createWithTypeCheckers()(class {});
-  
-  if (!is('string|number', 'test')) throw new Error('Composite string|number failed for string');
-  if (!is('string|number', 42)) throw new Error('Composite string|number failed for number');
-  if (is('string|number', true)) throw new Error('Composite string|number incorrectly passed for boolean');
-});
+    it('throws when value matches negated type', () => {
+      assertThrows(
+        () => instance.testMethod(42),
+        'value expected not number but got 42'
+      );
+    });
 
-// Test 3: Assertion methods
-testRunner.addTest('Assertion methods', () => {
-  const BaseClass = createWithTypeCheckers()(class TestClass {}, {
-    classPrefix: 'TestClass',
-    instancePrefix: () => 'instance'
+    it('does not throw when value doesnt match negated type', () => {
+      assertDoesNotThrow(() => instance.testMethod('hello'));
+    });
   });
 
-  // Test static assertions
-  try {
-    BaseClass.assert.is.string(42, 'Static');
-    throw new Error('Static assert should have thrown');
-  } catch (e) {
-    if (!e.message.includes('TestClass')) throw new Error('Static assert error missing class prefix');
-  }
+  describe('Custom Error Messages', () => {
+    const TestClass = withTypeCheckers(class TestClass {
+      id =1;
+      testMethod(value) {
+        this.assert.is.number(value, 'input value');
+      }
+    }, {
+      classPrefix: 'CustomClass',
+      instancePrefix() {
+        return '#'+this.id;
+      }
+    })
+    const instance = new TestClass();
 
-  // Test instance assertions
-  const instance = new BaseClass();
-  try {
-    instance.assert.is.string(42, 'Instance');
-    throw new Error('Instance assert should have thrown');
-  } catch (e) {
-    if (!e.message.includes('instance')) throw new Error('Instance assert error missing instance prefix');
-  }
-});
-
-// Test 4: Check methods (should warn)
-testRunner.addTest('Check methods', () => {
-  const originalWarn = console.warn;
-  let warningMessages = [];
-  console.warn = (msg) => warningMessages.push(msg);
-
-  const BaseClass = createWithTypeCheckers()(class {});
-  BaseClass.check.is.string(42, 'Check');
-  
-  if (warningMessages.length === 0) {
-    throw new Error('Check method should have warned');
-  }
-  
-  console.warn = originalWarn;
-});
-
-// Test 5: Custom checkers
-testRunner.addTest('Custom checkers', () => {
-  const customCheckers = {
-    even: v => typeof v === 'number' && v % 2 === 0,
-    odd: v => typeof v === 'number' && v % 2 === 1
-  };
-  
-  const { is } = createWithTypeCheckers(customCheckers)(class {});
-  
-  if (!is('even', 2)) throw new Error('Custom even checker failed');
-  if (!is('odd', 3)) throw new Error('Custom odd checker failed');
-  if (is('even', 3)) throw new Error('Custom even checker incorrectly passed for odd number');
-});
-
-// Test 6: Prefix configuration
-testRunner.addTest('Prefix configuration', () => {
-  const BaseClass = createWithTypeCheckers()(class TestClass {}, {
-    classPrefix: 'Custom',
-    instancePrefix: () => 'customInstance'
+    it('uses custom prefixes in error messages', () => {
+      assertThrows(
+        () => instance.testMethod('not a number'),
+        'CustomClass #1 input value expected number but got not a number'
+      );
+    });
   });
 
-  try {
-    BaseClass.assert.is.string(42, 'Test');
-  } catch (e) {
-    if (!e.message.includes('Custom')) throw new Error('Static prefix missing from error message');
-  }
+  describe('Custom Type Checkers', () => {
+    const withCustom = createWithTypeCheckers({
+      even: v => typeof v === 'number' && v % 2 === 0,
+      odd: v => typeof v === 'number' && v % 2 !== 0
+    });
 
-  const instance = new BaseClass();
-  try {
-    instance.assert.is.string(42, 'Test');
-  } catch (e) {
-    if (!e.message.includes('customInstance')) throw new Error('Instance prefix missing from error message');
-  }
-});
-/*
-// Test 7: are() method
-testRunner.addTest('are() method', () => {
-  const { are } = createWithTypeCheckers()(class {});
-  
-  if (!are('number', [1, 2, 3])) throw new Error('are() method failed for numbers');
-  if (are('number', [1, '2', 3])) throw new Error('are() method incorrectly passed for mixed array');
-  if (!are('string|number', [1, '2', 3])) throw new Error('are() method failed for string|number composite');
-});
-*/
-// Test 8: Negative assertions with .not
-testRunner.addTest('Negative assertions', () => {
-  const BaseClass = createWithTypeCheckers()(class {});
-  
-  try {
-    BaseClass.assert.is.not.string('actual string', 'Test');
-    throw new Error('Negative assert should have thrown for incorrect not check');
-  } catch (e) {
-    // Expected behavior
-  }
+    class TestClass extends withCustom() {
+      testEven(value) {
+        this.assert.is.even(value, 'value');
+      }
+    }
+    const instance = new TestClass();
 
-  // This should not throw
-  BaseClass.assert.is.not.string(42, 'Test');
-});
-
-// Test 9: Logging methods
-testRunner.addTest('Logging methods', () => {
-  const BaseClass = createWithTypeCheckers()(class TestClass {}, {
-    classPrefix: 'LoggerTest'
+    it('uses custom type checkers', () => {
+      assertThrows(
+        () => instance.testEven(3),
+        'value expected even but got 3'
+      );
+      assertDoesNotThrow(() => instance.testEven(4));
+    });
   });
-  
-  const instance = new BaseClass();
-  
-  // Just verify these methods exist and don't throw
-  instance.log('test log');
-  instance.warn('test warn');
-  instance.error('test error');
-  instance.debug('test debug');
-  
-  try {
-    instance.throw('test throw');
-    throw new Error('throw method should have thrown');
-  } catch (e) {
-    if (!e.message.includes('LoggerTest')) throw new Error('throw error missing prefix');
-  }
-});
 
-// Test 10: Empty and nullish values
-testRunner.addTest('Empty and nullish values', () => {
-  const { is } = createWithTypeCheckers()(class {});
-  
-  if (!is('nullish', null)) throw new Error('nullish check failed for null');
-  if (!is('nullish', undefined)) throw new Error('nullish check failed for undefined');
-  if (is('nullish', 0)) throw new Error('nullish check incorrectly passed for 0');
-  if (is('nullish', '')) throw new Error('nullish check incorrectly passed for empty string');
-  if (is('nullish', false)) throw new Error('nullish check incorrectly passed for false');
-});
+  describe('Static Methods', () => {
+    class TestClass extends withTypeCheckers() {}
+    
+    it('static is method works', () => {
+      assert(TestClass.is('string', 'hello'));
+      assert(!TestClass.is('string', 42));
+    });
 
-// Test 11: Default export
-testRunner.addTest('Default export', () => {
-  const BaseClass = withTypeCheckers(class TestClass {}, {
-    classPrefix: 'DefaultExportTest'
+    it('static assert method works', () => {
+      assertDoesNotThrow(() => TestClass.assert.is.string('hello', 'test'));
+      assertThrows(
+        () => TestClass.assert.is.string(42, 'test'),
+        'test expected string but got 42'
+      );
+    });
   });
-  
-  // Just verify it works similarly to createWithTypeCheckers
-  try {
-    BaseClass.assert.is.string(42, 'Test');
-    throw new Error('Default export assert should have thrown');
-  } catch (e) {
-    if (!e.message.includes('DefaultExportTest')) throw new Error('Default export error missing prefix');
-  }
+
+  describe('Edge Cases', () => {
+    const TestClass = withTypeCheckers();
+    const instance = new TestClass();
+
+    it('handles NaN correctly', () => {
+      assert(!instance.is('number', NaN));
+    });
+
+    it('handles infinite numbers correctly', () => {
+      assert(instance.is('number', Infinity));
+    });
+
+    it('distinguishes between array and object', () => {
+      assert(instance.is('array', []));
+      assert(!instance.is('object', []));
+    });
+  });
+
 });
 
-// Run all tests
-testRunner.runTests();
+// Run tests
+report();

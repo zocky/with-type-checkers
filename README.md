@@ -1,16 +1,6 @@
 # with-type-checkers
 
-A powerful JavaScript utility for adding runtime type checking and assertions to classes with zero configuration and extensive built-in type checkers.
-
-## Features
-
-- **30+ built-in type checkers** - From basic types to complex objects
-- **Class and instance methods** - Type checking available on both static and instance contexts
-- **Flexible assertion modes** - `assert` (throws errors) and `check` (console warnings)
-- **Extensible** - Add your own custom type checkers
-- **Zero dependencies** - Lightweight and self-contained
-- **ES6 class mixin** - Works with any existing class or creates standalone checker classes
-- **TypeScript-friendly** - Full type inference support
+A JavaScript/TypeScript utility for adding runtime type checking and assertions to classes.
 
 ## Installation
 
@@ -18,254 +8,161 @@ A powerful JavaScript utility for adding runtime type checking and assertions to
 npm install with-type-checkers
 ```
 
-## Quick Start
+## Usage
+
+### Basic Class Mixin
 
 ```javascript
-import { withTypeCheckers } from 'with-type-checkers';
+import withTypeCheckers from 'with-type-checkers';
 
 class MyClass extends withTypeCheckers() {
-  processData(input) {
-    // Throws error if input is not a string
-    this.assert.is.string(input, 'Input');
-    
-    // Warns if input is empty
-    this.check.is.notEmptyString(input, 'Input');
-    
-    return input.toUpperCase();
+  setName(name) {
+    this.assert.is.string(name, 'name');
+    this.name = name;
+  }
+  
+  setAge(age) {
+    this.assert.is.number(age, 'age');
+    this.age = age;
   }
 }
 
 const instance = new MyClass();
-instance.processData("hello"); // ✅ Works
-instance.processData(123);     // ❌ Throws: "Input expected string but got 123"
+instance.setName("John"); // OK
+instance.setName(123); // Throws: "MyClass name expected string but got 123"
 ```
 
-## Built-in Type Checkers
-
-### Basic Types
-- `string`, `number`, `boolean`, `function`, `object`, `array`
-- `null`, `undefined`, `nullish` (null or undefined)
-- `symbol`, `bigint`
-
-### Advanced Types
-- `plainObject` - Plain objects (not arrays, dates, etc.)
-- `date` - Valid Date objects
-- `regexp` - Regular expressions
-- `error` - Error instances
-- `promise` - Promise-like objects
-- `set`, `map`, `weakset`, `weakmap`
-- `iterable` - Objects with Symbol.iterator
-
-### String & Array Validators
-- `emptyString`, `notEmptyString`
-- `emptyArray`, `notEmptyArray`
-- `numeric` - Parseable numbers (including strings)
-
-### Function Types
-- `asyncFunction` - Async functions
-- `syncFunction` - Synchronous functions
-
-### Utility Types
-- `primitive` - Non-object, non-function values
-- `truthy`, `falsy`
-
-## API Reference
-
-### Basic Usage
+### Extending Existing Classes
 
 ```javascript
-// Extend existing class
-class MyClass extends withTypeCheckers(BaseClass) {
-  // Your methods here
+class BaseUser {
+  constructor(id) {
+    this.id = id;
+  }
 }
 
-// Create standalone checker class
-class TypeChecker extends withTypeCheckers() {
-  // Your methods here
+class User extends withTypeCheckers(BaseUser) {
+  setEmail(email) {
+    this.assert.is.string(email, 'email');
+    this.check.is.notEmptyString(email, 'email'); // Warning instead of error
+    this.email = email;
+  }
 }
-```
-
-### Instance Methods
-
-```javascript
-const instance = new MyClass();
-
-// Type checking
-instance.is('string', 'hello')        // true
-instance.is('string|number', 123)     // true (union types)
-instance.is.not('array', 'hello')     // true
-
-// Array type checking
-instance.are('string', ['a', 'b'])    // true
-instance.are('string|number', [1, 'a']) // true
-
-// Assertions (throw errors)
-instance.assert.is.string(value, 'Parameter name');
-instance.assert.is.not.null(value, 'Value');
-instance.assert.are.number([1, 2, 3], 'Numbers array');
-
-// Checks (console warnings)
-instance.check.is.notEmptyArray(arr, 'Data array');
-instance.check.is.not.undefined(config, 'Configuration');
-
-// Logging with prefixes
-instance.log('Processing started');
-instance.warn('Deprecated method used');
-instance.error('Processing failed');
-instance.debug('Debug info');
-instance.throw('Fatal error occurred');
-```
-
-### Static Methods
-
-```javascript
-// Available on the class itself
-MyClass.assert.is.function(callback, 'Callback');
-MyClass.is('object', {});
-MyClass.log('Class initialized');
 ```
 
 ### Configuration Options
 
 ```javascript
-const CheckerClass = withTypeCheckers(BaseClass, {
-  // Static method prefix (default: class name)
-  classPrefix: 'MyValidator',
-  
-  // Instance method prefix function
-  instancePrefix: function(instance) {
-    return `${this.constructor.name}#${instance.id}`;
+class MyClass extends withTypeCheckers({
+  classPrefix: 'CustomClass',
+  instancePrefix: function() { return `#${this.id}`; }
+}) {
+  constructor(id) {
+    super();
+    this.id = id;
   }
-});
+  
+  validate(data) {
+    this.assert.is.object(data, 'data'); 
+    // Error: "CustomClass #123 data expected object but got null"
+  }
+}
 ```
 
-## Advanced Examples
+## API
 
-### Custom Type Checkers
+### Type Checkers
+
+Available on both `assert.is` and `check.is`:
+
+| Checker | Description |
+|---------|-------------|
+| `object` | Non-null object (excludes arrays) |
+| `plainObject` | Plain object literal |
+| `string` | String primitive |
+| `number` | Number primitive |
+| `boolean` | Boolean primitive |
+| `function` | Function |
+| `array` | Array |
+| `null` | Null value |
+| `undefined` | Undefined value |
+| `nullish` | Null or undefined |
+| `symbol` | Symbol primitive |
+| `bigint` | BigInt primitive |
+| `date` | Valid Date object |
+| `regexp` | RegExp object |
+| `error` | Error instance |
+| `promise` | Promise or thenable |
+| `set` | Set instance |
+| `map` | Map instance |
+| `weakset` | WeakSet instance |
+| `weakmap` | WeakMap instance |
+| `iterable` | Object with Symbol.iterator |
+| `numeric` | Parseable number (string or number) |
+| `emptyString` | Empty string |
+| `notEmptyString` | Non-empty string |
+| `emptyArray` | Empty array |
+| `notEmptyArray` | Non-empty array |
+| `falsy` | Falsy value |
+| `truthy` | Truthy value |
+| `primitive` | Primitive value (not object/function) |
+| `asyncFunction` | Async function |
+| `syncFunction` | Synchronous function |
+
+### Methods
+
+#### `assert.is.{type}(value, description)`
+Throws an error if the type check fails.
+
+#### `assert.is.not.{type}(value, description)`
+Throws an error if the type check passes.
+
+#### `check.is.{type}(value, description)`
+Logs a warning if the type check fails.
+
+#### `check.is.not.{type}(value, description)`
+Logs a warning if the type check passes.
+
+#### `is(type, value)`
+Returns boolean. Supports union types with `|`:
+```javascript
+this.is('string|number', value); // true if string OR number
+```
+
+#### Utility Methods
+- `log(message)` - Console log with prefix
+- `warn(message)` - Console warning with prefix
+- `error(message)` - Console error with prefix
+- `debug(message)` - Console debug with prefix
+- `throw(message)` - Throw error with prefix
+
+## Custom Type Checkers
 
 ```javascript
 import { createWithTypeCheckers } from 'with-type-checkers';
 
-const customCheckers = {
-  email: v => typeof v === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
-  positiveNumber: v => typeof v === 'number' && v > 0,
-  nonEmptyObject: v => typeof v === 'object' && v !== null && Object.keys(v).length > 0
-};
+const withCustomCheckers = createWithTypeCheckers({
+  email: v => typeof v === 'string' && /\S+@\S+\.\S+/.test(v),
+  positiveInteger: v => Number.isInteger(v) && v > 0
+});
 
-const withCustomCheckers = createWithTypeCheckers(customCheckers);
-
-class UserValidator extends withCustomCheckers() {
-  validateUser(user) {
-    this.assert.is.nonEmptyObject(user, 'User object');
-    this.assert.is.email(user.email, 'Email');
-    this.assert.is.positiveNumber(user.age, 'Age');
+class User extends withCustomCheckers() {
+  setEmail(email) {
+    this.assert.is.email(email, 'email');
   }
-}
-```
-
-### Data Processing Pipeline
-
-```javascript
-class DataProcessor extends withTypeCheckers() {
-  process(data) {
-    // Validate input
-    this.assert.is.array(data, 'Input data');
-    this.assert.are('object', data, 'Data items');
-    
-    // Process with warnings for data quality
-    return data.map((item, index) => {
-      this.check.is.notEmptyString(item.name, `Item ${index} name`);
-      this.check.is.number(item.value, `Item ${index} value`);
-      
-      return {
-        ...item,
-        processed: true,
-        timestamp: new Date()
-      };
-    });
-  }
-}
-```
-
-### API Validation
-
-```javascript
-class APIHandler extends withTypeCheckers() {
-  handleRequest(req, res) {
-    // Validate request structure
-    this.assert.is.object(req.body, 'Request body');
-    this.assert.is.string(req.body.action, 'Action');
-    
-    // Optional parameters with warnings
-    this.check.is.object(req.body.params, 'Parameters');
-    this.check.is.string(req.body.clientId, 'Client ID');
-    
-    // Union type validation
-    this.assert.is('string|number', req.body.id, 'Resource ID');
-    
-    // Process request...
+  
+  setAge(age) {
+    this.assert.is.positiveInteger(age, 'age');
   }
 }
 ```
 
 ## Error Messages
 
-The library provides clear, descriptive error messages:
+Error messages follow the format: `{prefix} {description} expected {type} but got {value}`
 
-```javascript
-// Throws: "UserData expected string but got 123"
-this.assert.is.string(123, 'UserData');
-
-// Warns: "Config expected notEmptyArray but got []"
-this.check.is.notEmptyArray([], 'Config');
-```
-
-## Union Types
-
-Support for multiple acceptable types using the pipe operator:
-
-```javascript
-// Accepts strings or numbers
-this.assert.is('string|number', value, 'ID');
-
-// Arrays of mixed types
-this.assert.are('string|number|boolean', mixedArray, 'Mixed data');
-```
-
-## TypeScript Support
-
-While this is a JavaScript library, it works well with TypeScript:
-
-```typescript
-interface User {
-  name: string;
-  age: number;
-}
-
-class UserService extends withTypeCheckers() {
-  processUser(user: User) {
-    this.assert.is.object(user, 'User');
-    this.assert.is.string(user.name, 'User name');
-    this.assert.is.number(user.age, 'User age');
-    // TypeScript knows user is properly typed here
-  }
-}
-```
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+Example: `"MyClass #123 email expected string but got 456"`
 
 ## License
 
 MIT
-
-## Changelog
-
-### 1.0.0
-- Initial release
-- 30+ built-in type checkers
-- Class and instance method support
-- Custom type checker support
-- Union type support
-- Comprehensive error messaging

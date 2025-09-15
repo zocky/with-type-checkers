@@ -5,7 +5,7 @@ const defaultTypeCheckers = {
   object: v => typeof v === 'object' && v !== null && !Array.isArray(v),
   plainObject: v => Object.prototype.toString.call(v) === '[object Object]',
   string: v => typeof v === 'string',
-  number: v => typeof v === 'number',
+  number: v => typeof v === 'number' && !isNaN(v),
   boolean: v => typeof v === 'boolean',
   function: v => typeof v === 'function',
   array: v => Array.isArray(v),
@@ -69,9 +69,9 @@ export function createWithTypeCheckers(extraCheckers = {}) {
 
   /* ---- 2d. binders ---- */
   const _assert = (prefix, cond, msg) => { if (!cond) throw new Error(prefix + _msg(msg)); };
-  const _assertNot = (prefix, cond, msg) => { if (cond) throw new Error(prefix + _msg(msg)); };
+  const _assertNot = (prefix, cond, msg) => { if (cond) throw new Error(prefix + _msg({...msg, type: 'not ' + msg.type})); };
   const _check = (prefix, cond, msg) => { if (!cond) console.warn(prefix + _msg(msg)); };
-  const _checkNot = (prefix, cond, msg) => { if (cond) console.warn(prefix + _msg(msg)); };
+  const _checkNot = (prefix, cond, msg) => { if (cond) console.warn(prefix + _msg({...msg, type: 'not ' + msg.type})); };
 
   const bindChecker = (ctx, prefix, fn, fnNot) => {
     const handler = fn.bind(ctx, prefix);
@@ -79,15 +79,17 @@ export function createWithTypeCheckers(extraCheckers = {}) {
     handler.is._handler = handler;
     handler.is.not = Object.create(checkerProto);
     handler.is.not._handler = fnNot.bind(ctx, prefix);
-    handler.are = Object.create(checkerProto);
-    handler.are._handler = (type, arr) => _assert(prefix, are(type, arr), '');
+    // NO ARRAY SUPPORT FOR NOW
+    // handler.are = Object.create(checkerProto);
+    // handler.are._handler = (type, arr) => _assert(prefix, are(type, arr), '');
     return handler;
   };
 
   /* ---- 2e. context installer ---- */
   const applyCheckerContext = (ctx, prefix) => {
     ctx.is = is;
-    ctx.are = are;
+    // NO ARRAY SUPPORT FOR NOW
+    // ctx.are = are;
     ctx.assert = bindChecker(ctx, prefix, _assert, _assertNot);
     ctx.check = bindChecker(ctx, prefix, _check, _checkNot);
     ctx.log = console.log.bind(console, prefix);
@@ -118,7 +120,8 @@ export function createWithTypeCheckers(extraCheckers = {}) {
         super(...args);
         const thisPrefix = [classPrefix, instancePrefix?.call(this, this)]
           .filter(Boolean)
-          .join(' ');
+          .map(p => p + ' ')
+          .join('');
         applyCheckerContext(this, thisPrefix);
       }
     };
