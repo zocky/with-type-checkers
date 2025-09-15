@@ -11,7 +11,7 @@ const defaultTypeCheckers = {
   array: v => Array.isArray(v),
   null: v => v === null,
   undefined: v => typeof v === 'undefined',
-  nullish: v => v === null || typeof v === 'undefined',
+  none: v => v === null || typeof v === 'undefined',
   symbol: v => typeof v === 'symbol',
   bigint: v => typeof v === 'bigint',
   date: v => v instanceof Date && !isNaN(v),
