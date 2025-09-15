@@ -1,0 +1,33 @@
+{
+  "name": "with-type-checkers",
+  "version": "1.0.0",
+  "description": "A JavaScript/TypeScript utility for adding runtime type checking and assertions to classes",
+  "main": "with-type-checkers.js",
+  "type": "module",
+  "scripts": {
+    "test": "node test.js",
+    "lint": "eslint *.js",
+    "prepublishOnly": "npm test && npm run lint"
+  },
+  "keywords": [
+    "type-checking",
+    "runtime",
+    "assertions",
+    "validation",
+    "utility",
+    "javascript"
+  ],
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zocky/with-type-checkers.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zocky/with-type-checkers/issues"
+  },
+  "homepage": "https://github.com/zocky/with-type-checkers#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
