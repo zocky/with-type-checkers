@@ -1,6 +1,6 @@
 {
   "name": "with-type-checkers",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A JavaScript/TypeScript utility for adding runtime type checking and assertions to classes",
   "keywords": [
     "type-checking",
