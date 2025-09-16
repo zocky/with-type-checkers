@@ -1,132 +1,157 @@
-/* -------------- 1.  built-in checkers -------------- */
-const AsyncFunction = (async () => { }).constructor;
+import { defaultTypeCheckers } from "./defaultTypeCheckers.js";
+import { formatMessage, formatValue, formatExpected, throwExpected, throwMessage, warnMessage } from "./formatMessage.js";
 
-const defaultTypeCheckers = {
-  object: v => typeof v === 'object' && v !== null && !Array.isArray(v),
-  plainObject: v => Object.prototype.toString.call(v) === '[object Object]',
-  string: v => typeof v === 'string',
-  number: v => typeof v === 'number' && !isNaN(v),
-  boolean: v => typeof v === 'boolean',
-  function: v => typeof v === 'function',
-  array: v => Array.isArray(v),
-  null: v => v === null,
-  undefined: v => typeof v === 'undefined',
-  none: v => v === null || typeof v === 'undefined',
-  symbol: v => typeof v === 'symbol',
-  bigint: v => typeof v === 'bigint',
-  date: v => v instanceof Date && !isNaN(v),
-  regexp: v => v instanceof RegExp,
-  error: v => v instanceof Error,
-  promise: v => v instanceof Promise || (v && typeof v.then === 'function' && typeof v.catch === 'function'),
-  set: v => v instanceof Set,
-  map: v => v instanceof Map,
-  weakset: v => v instanceof WeakSet,
-  weakmap: v => v instanceof WeakMap,
-  iterable: v => typeof v === 'object' && v !== null && typeof v[Symbol.iterator] === 'function',
-  numeric: v => !isNaN(parseFloat(v)) && isFinite(v),
-  emptyString: v => typeof v === 'string' && v.length === 0,
-  notEmptyString: v => typeof v === 'string' && v.length > 0,
-  emptyArray: v => Array.isArray(v) && v.length === 0,
-  notEmptyArray: v => Array.isArray(v) && v.length > 0,
-  falsy: v => !v,
-  truthy: v => !!v,
-  primitive: v => v === null || (typeof v !== 'object' && typeof v !== 'function'),
-  asyncFunction: v => typeof v === 'function' && v instanceof AsyncFunction,
-  syncFunction: v => typeof v === 'function' && !(v instanceof AsyncFunction),
-};
+function undot_shallow(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (obj.constructor && obj.constructor !== Object) return obj;
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const keys = k.split('.');
+    const last = keys.pop();
+    let target = out;
+    for (const key of keys) target = target[key] ??= {};
+    target[last] = v;
+  }
+  return out;
+}
+
+function undot_deep(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (obj.constructor && obj.constructor !== Object) return obj;
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const keys = k.split('.');
+    const last = keys.pop();
+    let target = out;
+    for (const key of keys) target = target[key] ??= {};
+    target[last] = v ? undot_deep(v) : v;
+  }
+  return out;
+}
 
 /* -------------- 2.  factory -------------- */
-export function createWithTypeCheckers(extraCheckers = {}) {
-  /* ---- 2a. final checker set ---- */
-  const typeCheckers = { ...defaultTypeCheckers, ...extraCheckers };
 
-  /* ---- 2b. checker prototype ---- */
-  const checkerProto = Object.create(null);
+const applyCheckerContext = function (typeCheckers,ctx, {undot:undotMode,...options}) {
+  const isProto = {};
   for (const type in typeCheckers) {
     const checker = typeCheckers[type];
-    checkerProto[type] = function (value, desc) {
-
-      this._handler(checker(value), { desc, type, value });
+    isProto[type] = function (value, desc) {
+      return this._fn(checker(value), { type, value,  path: [desc ?? ''] });
     };
   }
 
-  const _msg = ({ type, value, desc }) => {
-    const msg = `${desc} expected ${type} but got ${String(value)}`;
-    return msg;
-  }
+  const undot = 
+    undotMode == 'deep' ? undot_deep 
+    : undotMode == 'shallow' ? undot_shallow 
+    : v=>v;
 
-  /* ---- 2c. core helpers ---- */
-  const is = (type, value) => {
-    if (typeof type === 'string') return type.split('|').some(t => typeCheckers[t]?.(value));
-    if (Array.isArray(type)) {
-      if (!Array.isArray(value)) return false;
-      if (type.length !== 1) throw new Error(prefix + 'array type checkers must be of length 1');
-      const [t] = type;
-      return value.every(v => is(t, v));
-    }
-    if (type && typeof type === 'object') {
-      if (typeof value !== 'object' || value === null) return false;
-      for (const k in type) {
-        if (!is(type[k], value[k])) return false;
+  // ---- new walker factory ----
+  const makeIsType = fn => {
+    function walk(type, value, path = []) {
+      if (typeof type === 'string') {
+        const ok = type.split('|').some(t => typeCheckers[t]?.(value));
+        if (!fn(ok, { type, value, path })) return false;
+        return ok;
       }
-      return true;
+      if (Array.isArray(type)) {
+        if (!Array.isArray(value)) return false;
+        if (type.length !== 1) throwMessage(options, 'array type checkers must be of length 1');
+        const [t] = type;
+        return value.every((v, i) => walk(t, v, [...path, i]));
+      }
+      if (type && typeof type === 'object') {
+        if (typeof value !== 'object' || value === null) return false;
+        const v = undot(value);
+        return Object.keys(type).every(k => walk(type[k], v[k], [...path, k]));
+      }
+      if (typeof type === 'function') {
+        return fn(type(value), { type, value, path });
+      }
     }
+    return walk
   }
-  is.not = (type, value) => !is(type, value);
 
-
-
-  /* ---- 2d. binders ---- */
-  const _assert = (prefix, cond, msg) => { if (!cond) throw new Error(prefix + _msg(msg)); };
-  const _assertNot = (prefix, cond, msg) => { if (cond) throw new Error(prefix + _msg({ ...msg, type: 'not ' + msg.type })); };
-  const _check = (prefix, cond, msg) => { if (!cond) console.warn(prefix + _msg(msg)); };
-  const _checkNot = (prefix, cond, msg) => { if (cond) console.warn(prefix + _msg({ ...msg, type: 'not ' + msg.type })); };
-
-  const bindChecker = (ctx, prefix, fn, fnNot) => {
-    const handler = fn.bind(ctx, prefix);
-    handler.is = Object.create(checkerProto);
-    handler.is._handler = handler;
-    handler.is.not = Object.create(checkerProto);
-    handler.is.not._handler = fnNot.bind(ctx, prefix);
+  const makeIs = (fn) => {
+    const isType = makeIsType(fn);
+    const handler = (type, value, desc) => fn(isType(type, value, [desc ?? '']), { type, value, path: [desc ?? ''] });
+    Object.assign(handler, isProto, { _fn: fn });
     return handler;
-  };
+  }
 
-  /* ---- 2e. context installer ---- */
-  const applyCheckerContext = (ctx, prefix) => {
-    ctx.is = is;
-    ctx.assert = bindChecker(ctx, prefix, _assert, _assertNot);
-    ctx.check = bindChecker(ctx, prefix, _check, _checkNot);
-    ctx.log = console.log.bind(console, prefix);
-    ctx.warn = msg => console.warn(prefix + msg);
-    ctx.error = msg => console.error(prefix + msg);
-    ctx.debug = msg => console.debug(prefix + msg);
-    ctx.throw = msg => { throw new Error(prefix + msg); };
-  };
+
+  ctx.is = makeIs(ok => ok);
+  ctx.is.not = makeIs(ok => !ok);
+
+  // generic assert
+  ctx.assert = (ok, message) => {
+    if (!ok) throwMessage({ options, message });
+  }
+  ctx.assert.not = (ok, message) => {
+    if (ok) throwMessage({ options, message });
+  }
+  // per type assert, we will call expectedThrow
+  ctx.assert.is = makeIs((ok, { type, value, path }) => {
+    if (!ok) throwExpected({ value, path, type, options });
+    return true;
+  });
+  ctx.assert.is.not = makeIs((ok, { type, value, path }) => {
+    if (ok) throwExpected({ value, path, type: 'not ' + type, options });
+    return true;
+  });
+
+  ctx.check = (ok, message) => {
+    if (!ok) console.warn(formatMessage({ options, message }));
+  }
+  ctx.check.not = (ok, message) => {
+    if (ok) console.warn(formatMessage({ options, message }));
+  }
+
+  ctx.check.is = makeIs((ok, { type, value, path }) => {
+    if (!ok) console.warn(formatExpected({ options, type, value, path }));
+    return true;
+  });
+  ctx.check.is.not = makeIs((ok, { type, value, path }) => {
+    if (ok) console.warn(formatExpected({ options, type, value, path }));
+    return true;
+  });
+
+  ctx.log = (...args) => console.log(...options.prefix(), ...args);
+  ctx.warn = (...args) => warnMessage({ options }, ...args);
+  ctx.error = message => console.error(formatMessage({ options, message }));
+  ctx.debug = message => console.debug(formatMessage({ options, message }));
+  ctx.throw = message => throwMessage({ options, message });
+
+}
+export function createWithTypeCheckers(extraTypeCheckers = {}) {
+  const typeCheckers = { ...defaultTypeCheckers, ...extraTypeCheckers };
+
 
   /* ---- 2f. the returned mixin factory ---- */
-
-
-
   return function (ClassOrOptions = {}, maybeOptions) {
     // both arguments are optional
     // supply a class for mixins, optionally skip for creating a base class
-    const [Class, options] = typeof ClassOrOptions === 'function'
+    const [Class, allOptions] = typeof ClassOrOptions === 'function'
       ? [ClassOrOptions, maybeOptions ?? {}]
       : [class { }, ClassOrOptions ?? {}];
 
-    let { classPrefix = Class.name ?? 'typecheck', instancePrefix = null } = options;
+    let { classPrefix = Class.name ?? 'typecheck', instancePrefix = null, ...options } = allOptions;
+
+    if (typeof classPrefix === 'function') classPrefix = classPrefix();
+    if (typeof instancePrefix === 'string') instancePrefix = instance => instance[instancePrefix];
 
     return class extends Class {
       static {
-        applyCheckerContext(this, classPrefix + ' ');
+        applyCheckerContext(typeCheckers,this, {
+          ...options,
+          prefix: () => [classPrefix],
+        });
       }
       constructor(...args) {
         super(...args);
-        const thisPrefix = [classPrefix, instancePrefix?.call(this, this)]
-          .filter(Boolean)
-          .map(p => p + ' ')
-          .join('');
-        applyCheckerContext(this, thisPrefix);
+        applyCheckerContext(typeCheckers,this, {
+          ...options,
+          prefix: () => [classPrefix, instancePrefix?.call(this, this)],
+        });
       }
     };
   }

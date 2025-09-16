@@ -106,7 +106,7 @@ describe('with-type-checkers - Comprehensive Tests', () => {
     it('throws on type mismatch', () => {
       assertThrows(
         () => instance.testMethod(42),
-        'value expected string but got 42'
+        'value expected string but got [number 42]'
       );
     });
 
@@ -126,7 +126,7 @@ describe('with-type-checkers - Comprehensive Tests', () => {
     it('throws when value matches negated type', () => {
       assertThrows(
         () => instance.testMethod(42),
-        'value expected not number but got 42'
+        'value expected not number but got [number 42]'
       );
     });
 
@@ -152,7 +152,7 @@ describe('with-type-checkers - Comprehensive Tests', () => {
     it('uses custom prefixes in error messages', () => {
       assertThrows(
         () => instance.testMethod('not a number'),
-        'CustomClass #1 input value expected number but got not a number'
+        'CustomClass #1 input value expected number but got [string "not a number"]'
       );
     });
   });
@@ -173,7 +173,7 @@ describe('with-type-checkers - Comprehensive Tests', () => {
     it('uses custom type checkers', () => {
       assertThrows(
         () => instance.testEven(3),
-        'value expected even but got 3'
+        'value expected even but got [number 3]'
       );
       assertDoesNotThrow(() => instance.testEven(4));
     });
@@ -191,7 +191,14 @@ describe('with-type-checkers - Comprehensive Tests', () => {
       assertDoesNotThrow(() => TestClass.assert.is.string('hello', 'test'));
       assertThrows(
         () => TestClass.assert.is.string(42, 'test'),
-        'test expected string but got 42'
+        'test expected string but got [number 42]'
+      );
+    });
+    it('static assert with no desc works', () => {
+      assertDoesNotThrow(() => TestClass.assert.is.string('hello'));
+      assertThrows(
+        () => TestClass.assert.is('string', 42),
+        'expected string but got [number 42]'
       );
     });
   });

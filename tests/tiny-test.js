@@ -41,6 +41,7 @@ export function assertThrows(fn, expectedMsg) {
   try { fn(); } catch (e) { threw = true; err = e; }
   if (!threw) throw new Error('Expected function to throw');
   if (expectedMsg && !err.message.includes(expectedMsg)) {
+//    console.error(indent()+ 'Expected error containing "' + expectedMsg + '", got "' + err.message + '"');
     throw new Error(`Expected error containing "${expectedMsg}", got "${err.message}"`);
   }
 }
