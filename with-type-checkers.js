@@ -29,24 +29,35 @@ function undot_deep(obj) {
   return out;
 }
 
+
 /* -------------- 2.  factory -------------- */
 
-const applyCheckerContext = function (typeCheckers,ctx, {undot:undotMode,...options}) {
+const applyCheckerContext = function (typeCheckers, ctx, { undot: undotMode, ...options }) {
   const isProto = {};
   for (const type in typeCheckers) {
     const checker = typeCheckers[type];
     isProto[type] = function (value, desc) {
-      return this._fn(checker(value), { type, value,  path: [desc ?? ''] });
+      return this._fn(checker(value), { type, value, path: [desc ?? ''] });
     };
   }
 
-  const undot = 
-    undotMode == 'deep' ? undot_deep 
-    : undotMode == 'shallow' ? undot_shallow 
-    : v=>v;
+  const undot =
+    undotMode == 'deep' ? undot_deep
+      : undotMode == 'shallow' ? undot_shallow
+        : v => v;
 
   // ---- new walker factory ----
   const makeIsType = fn => {
+    const operators = {
+      $all: (type, value, path) => type.every((t, i) => walk(t, value, path)),
+      $every: (type, value, path) => type.every((t, i) => walk(t, value, path)),
+      $and: (type, value, path) => type.every((t, i) => walk(t, value, path)),
+      $any: (type, value, path) => fn(type.some((t, i) => ctx.is(t, value, path.join('.'))), { type, value, path }),
+      $some: (type, value, path) => fn(type.some((t, i) => ctx.is(t, value, path.join('.'))), { type, value, path }),
+      $or: (type, value, path) => fn(type.some((t, i) => ctx.is(t, value, path.join('.'))), { type, value, path }),
+      $not: (type, value, path) => fn(type.every((t, i) => ctx.is.not(t, value, path.join('.'))), { type, value, path }),
+      $tuple: (type, value, path) => type.every((t, i) => walk(t, value[i], [...path, i])),
+    }
     function walk(type, value, path = []) {
       if (typeof type === 'string') {
         const ok = type.split('|').some(t => typeCheckers[t]?.(value));
@@ -54,12 +65,24 @@ const applyCheckerContext = function (typeCheckers,ctx, {undot:undotMode,...opti
         return ok;
       }
       if (Array.isArray(type)) {
-        if (!Array.isArray(value)) return false;
-        if (type.length !== 1) throwMessage(options, 'array type checkers must be of length 1');
-        const [t] = type;
-        return value.every((v, i) => walk(t, v, [...path, i]));
+        if (type.length === 0) throwMessage(options, 'not allowed []');
+        if (type.length === 1) return value.every(v => walk(type[0], v, path));
+        const t = type.shift();
+        const op = operators[t];
+        if (!op) throwMessage(options, `not allowed [${t}]`);
+        return op(type, value, path);
       }
       if (type && typeof type === 'object') {
+        const keys = Object.keys(type);
+        //if (keys.length === 0) throwMessage(options, 'not allowed {}');
+        if (keys.length === 1) {
+          const t = keys[0];
+          if (t in operators) {
+            const _type = type[t];
+            const op = operators[t];
+            return op(_type, value, path);
+          }
+        };
         if (typeof value !== 'object' || value === null) return false;
         const v = undot(value);
         return Object.keys(type).every(k => walk(type[k], v[k], [...path, k]));
@@ -101,21 +124,23 @@ const applyCheckerContext = function (typeCheckers,ctx, {undot:undotMode,...opti
 
   ctx.check = (ok, message) => {
     if (!ok) console.warn(formatMessage({ options, message }));
+    return ok;
   }
   ctx.check.not = (ok, message) => {
     if (ok) console.warn(formatMessage({ options, message }));
+    return !ok;
   }
 
   ctx.check.is = makeIs((ok, { type, value, path }) => {
     if (!ok) console.warn(formatExpected({ options, type, value, path }));
-    return true;
+    return ok;
   });
   ctx.check.is.not = makeIs((ok, { type, value, path }) => {
     if (ok) console.warn(formatExpected({ options, type, value, path }));
-    return true;
+    return !ok;
   });
 
-  ctx.log = (...args) => console.log(...options.prefix(), ...args);
+  ctx.log = (...args) => console.log(...options.prefix().filter(Boolean), ...args);
   ctx.warn = (...args) => warnMessage({ options }, ...args);
   ctx.error = message => console.error(formatMessage({ options, message }));
   ctx.debug = message => console.debug(formatMessage({ options, message }));
@@ -141,14 +166,14 @@ export function createWithTypeCheckers(extraTypeCheckers = {}) {
 
     return class extends Class {
       static {
-        applyCheckerContext(typeCheckers,this, {
+        applyCheckerContext(typeCheckers, this, {
           ...options,
           prefix: () => [classPrefix],
         });
       }
       constructor(...args) {
         super(...args);
-        applyCheckerContext(typeCheckers,this, {
+        applyCheckerContext(typeCheckers, this, {
           ...options,
           prefix: () => [classPrefix, instancePrefix?.call(this, this)],
         });

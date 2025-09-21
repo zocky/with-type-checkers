@@ -236,6 +236,16 @@ describe('with-type-checkers - Comprehensive Tests', () => {
     assert(!instance.is([['string']], [['a', 1]]));
   });
 
+  /* ---------- operators ---------- */
+  it('operators $all', () => {
+    assert(instance.is(['$all', 'number', x=> x > 0], 2));
+    assertThrows(() => assert(instance.is(['$all', 'numeric', 'string'], 2)));
+  });
+
+  it('operators $any', () => {
+    assert(instance.is(['$any', 'number', x=> x < 0], 2));
+    assertThrows(() => assert(instance.is(['$any', 'boolean', 'string'], 2)));
+  });
   /* ---------- objects ---------- */
   it('shape {name:string,age:number}', () => {
     assert(instance.is({ name: 'string', age: 'number' }, { name: 'Bob', age: 30 }));

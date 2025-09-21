@@ -1,5 +1,6 @@
 export const AsyncFunction = (async () => { }).constructor;
 export const defaultTypeCheckers = {
+  any: v => true,
   object: v => typeof v === 'object' && v !== null && !Array.isArray(v),
   plainObject: v => Object.prototype.toString.call(v) === '[object Object]',
   string: v => typeof v === 'string',
